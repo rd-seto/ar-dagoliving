@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DagoLiving AR</title>
-  <!-- Use stable versions of libraries -->
+  <title>DagoLiving AR Detection</title>
   <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <!-- Add ARjs marker detection script -->
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/three.js/build/ar-threex.js"></script>
   <style>
     .info-ui {
       position: fixed;
@@ -21,20 +22,66 @@
     }
     .found { background-color: rgba(0, 128, 0, 0.8); }
     .lost { background-color: rgba(255, 0, 0, 0.8); }
+    
+    /* Add debug view styles */
+    #debug-view {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 5px;
+      z-index: 1000;
+    }
+    
+    /* Detection indicator */
+    #detection-indicator {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 200px;
+      height: 200px;
+      border: 2px solid rgba(255, 255, 255, 0.5);
+      border-radius: 10px;
+      pointer-events: none;
+      z-index: 999;
+    }
+    
+    .detecting {
+      border-color: yellow !important;
+    }
+    
+    .marker-found {
+      border-color: lime !important;
+    }
   </style>
 </head>
 <body style="margin: 0; overflow: hidden;">
+  <!-- Status UI -->
   <div class="info-ui lost" id="uiobj">Starting camera...</div>
+  
+  <!-- Detection indicator -->
+  <div id="detection-indicator"></div>
+  
+  <!-- Debug info -->
+  <div id="debug-view">
+    Confidence: <span id="confidence">0</span>%<br>
+    Position: <span id="marker-position">Searching...</span>
+  </div>
 
+  <!-- AR Scene -->
   <a-scene 
     embedded
     arjs="sourceType: webcam; 
           detectionMode: mono_and_matrix;
           matrixCodeType: 3x3;
           debugUIEnabled: false;
-          patternRatio: 0.75;">
+          patternRatio: 0.75;
+          trackingMethod: best;">
 
-    <!-- Using your specific pattern file -->
     <a-marker 
       type="pattern" 
       url="https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/pattern-hiro.patt"
@@ -43,9 +90,8 @@
       smoothCount="5"
       smoothTolerance="0.01"
       smoothThreshold="2"
-      emitevents="true">
+      registerevents>
       
-      <!-- Image plane using your specific image -->
       <a-image 
         id="imagePlane"
         src="https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/capture.jpg"
@@ -60,12 +106,27 @@
   </a-scene>
 
   <script>
-    // Get DOM elements
+    // Get all UI elements
     const marker = document.getElementById('marker');
     const uiObj = document.getElementById('uiobj');
     const imagePlane = document.getElementById('imagePlane');
+    const debugView = document.getElementById('debug-view');
+    const confidenceSpan = document.getElementById('confidence');
+    const positionSpan = document.getElementById('marker-position');
+    const detectionIndicator = document.getElementById('detection-indicator');
 
-    // Function to update image
+    let isDetecting = false;
+    let confidenceThreshold = 0.6; // 60% confidence threshold
+
+    // Function to update detection indicator
+    function updateDetectionStatus(status, confidence = 0) {
+      detectionIndicator.className = status;
+      if (confidence > 0) {
+        confidenceSpan.textContent = (confidence * 100).toFixed(1);
+      }
+    }
+
+    // Function to update image with timestamp
     function updateImage() {
       const timestamp = Date.now();
       imagePlane.setAttribute('src', 
@@ -73,42 +134,76 @@
       );
     }
 
-    // Marker found event
-    marker.addEventListener('markerFound', () => {
+    // Start detection mode
+    function startDetecting() {
+      if (!isDetecting) {
+        isDetecting = true;
+        detectionIndicator.classList.add('detecting');
+        uiObj.textContent = "Looking for marker...";
+      }
+    }
+
+    // Marker detection events with confidence
+    marker.addEventListener('markerFound', (event) => {
+      isDetecting = false;
+      updateDetectionStatus('marker-found');
       uiObj.textContent = "Marker detected!";
       uiObj.classList.remove('lost');
       uiObj.classList.add('found');
       
-      // Animate the image
+      // Update position info
+      const position = marker.object3D.position;
+      positionSpan.textContent = 
+        `x: ${position.x.toFixed(2)}, y: ${position.y.toFixed(2)}, z: ${position.z.toFixed(2)}`;
+      
       imagePlane.setAttribute('position', '4 0 0');
     });
 
-    // Marker lost event
     marker.addEventListener('markerLost', () => {
-      uiObj.textContent = "Looking for marker...";
+      startDetecting();
+      updateDetectionStatus('');
+      uiObj.textContent = "Marker lost - realigning...";
       uiObj.classList.remove('found');
       uiObj.classList.add('lost');
       
+      positionSpan.textContent = "Searching...";
       imagePlane.setAttribute('position', '0 0 0');
     });
 
-    // Scene loaded event
+    // Scene events
     document.querySelector('a-scene').addEventListener('loaded', () => {
-      uiObj.textContent = "Scene loaded - Show marker";
-      // Start image update interval
+      uiObj.textContent = "Scene ready - Show marker";
+      startDetecting();
       setInterval(updateImage, 5000);
     });
 
-    // Camera ready event
-    document.querySelector('[camera]').addEventListener('camera-init', (event) => {
+    // Camera events
+    document.querySelector('[camera]').addEventListener('camera-init', () => {
       uiObj.textContent = "Camera ready - Show marker";
+      startDetecting();
     });
 
-    // Handle camera error
     document.querySelector('[camera]').addEventListener('camera-error', (error) => {
-      uiObj.textContent = "Camera error - Please refresh and allow camera";
+      uiObj.textContent = "Camera error - Please refresh";
       console.error('Camera error:', error);
+      updateDetectionStatus('');
     });
+
+    // Add continuous marker tracking
+    let lastTime = performance.now();
+    function checkMarker() {
+      const currentTime = performance.now();
+      if (currentTime - lastTime > 100) { // Check every 100ms
+        if (marker.object3D.visible) {
+          const position = marker.object3D.position;
+          positionSpan.textContent = 
+            `x: ${position.x.toFixed(2)}, y: ${position.y.toFixed(2)}, z: ${position.z.toFixed(2)}`;
+        }
+        lastTime = currentTime;
+      }
+      requestAnimationFrame(checkMarker);
+    }
+    checkMarker();
   </script>
 </body>
 </html>
