@@ -20,7 +20,8 @@
     const imagePlane = document.getElementById("imagePlane");
     const marker = document.getElementById("marker");
 
-    const imageUrl = "capture.jpg";
+    // Correct URL to the image
+    const imageUrl = "https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/capture.jpg"; 
     let isAnimationRunning = false; // To prevent multiple animations
 
     marker.addEventListener("markerFound", () => {
