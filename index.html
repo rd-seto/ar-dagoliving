@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR.js Camera Fix</title>
-  <!-- Make sure these libraries load before anything else -->
+  <title>DagoLiving AR</title>
+  <!-- Use stable versions of libraries -->
   <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <style>
@@ -24,111 +24,90 @@
   </style>
 </head>
 <body style="margin: 0; overflow: hidden;">
-  <!-- Information UI Element -->
   <div class="info-ui lost" id="uiobj">Starting camera...</div>
 
-  <!-- AR Scene with explicit camera settings -->
   <a-scene 
-    vr-mode-ui="enabled: false"
     embedded
     arjs="sourceType: webcam; 
-          sourceWidth: 1280; 
-          sourceHeight: 960; 
-          displayWidth: 1280; 
-          displayHeight: 960; 
-          debugUIEnabled: false;">
-    
+          detectionMode: mono_and_matrix;
+          matrixCodeType: 3x3;
+          debugUIEnabled: false;
+          patternRatio: 0.75;">
+
+    <!-- Using your specific pattern file -->
     <a-marker 
-      preset="hiro"
+      type="pattern" 
+      url="https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/pattern-hiro.patt"
       id="marker"
-      raycaster="objects: .clickable"
+      smooth="true"
+      smoothCount="5"
+      smoothTolerance="0.01"
+      smoothThreshold="2"
       emitevents="true">
-      <a-plane 
+      
+      <!-- Image plane using your specific image -->
+      <a-image 
         id="imagePlane"
-        class="clickable"
+        src="https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/capture.jpg"
         position="0 0 0"
         rotation="-90 0 0"
         width="4"
-        height="2.25"
-        material="shader: flat; src: https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/capture.jpg">
-      </a-plane>
+        height="2.25">
+      </a-image>
     </a-marker>
 
-    <!-- Explicitly define camera with AR.js settings -->
     <a-entity camera></a-entity>
   </a-scene>
 
   <script>
-    window.onload = function() {
-      // Get DOM elements
-      const marker = document.getElementById('marker');
-      const uiObj = document.getElementById('uiobj');
-      const imagePlane = document.getElementById('imagePlane');
+    // Get DOM elements
+    const marker = document.getElementById('marker');
+    const uiObj = document.getElementById('uiobj');
+    const imagePlane = document.getElementById('imagePlane');
+
+    // Function to update image
+    function updateImage() {
+      const timestamp = Date.now();
+      imagePlane.setAttribute('src', 
+        `https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/capture.jpg?t=${timestamp}`
+      );
+    }
+
+    // Marker found event
+    marker.addEventListener('markerFound', () => {
+      uiObj.textContent = "Marker detected!";
+      uiObj.classList.remove('lost');
+      uiObj.classList.add('found');
       
-      // Function to handle camera initialization
-      function initCamera() {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          navigator.mediaDevices.getUserMedia({ 
-            video: { 
-              facingMode: 'environment',
-              width: { ideal: 1280 },
-              height: { ideal: 960 }
-            } 
-          })
-          .then(function(stream) {
-            uiObj.textContent = "Camera active - Show Hiro marker";
-            // Don't stop the stream this time
-          })
-          .catch(function(err) {
-            uiObj.textContent = "Camera error: " + err.message;
-            console.error('Camera error:', err);
-          });
-        } else {
-          uiObj.textContent = "Camera not supported by your browser";
-        }
-      }
-
-      // Initialize camera
-      initCamera();
-
-      // Marker detection events
-      marker.addEventListener('markerFound', function() {
-        uiObj.textContent = "Marker detected!";
-        uiObj.classList.remove('lost');
-        uiObj.classList.add('found');
-        
-        // Animate the plane
-        imagePlane.setAttribute('position', '4 0 0');
-      });
-
-      marker.addEventListener('markerLost', function() {
-        uiObj.textContent = "Marker lost - Show Hiro marker";
-        uiObj.classList.remove('found');
-        uiObj.classList.add('lost');
-        
-        // Reset plane position
-        imagePlane.setAttribute('position', '0 0 0');
-      });
-
-      // Image update function
-      function updateImage() {
-        const timestamp = Date.now();
-        const imageUrl = `https://raw.githubusercontent.com/rd-seto/ar-dagoliving/main/capture.jpg?t=${timestamp}`;
-        imagePlane.setAttribute('material', 'src', imageUrl);
-      }
-
-      // Update image every 5 seconds
-      setInterval(updateImage, 5000);
-    };
-
-    // Add error handling for A-Frame scene
-    document.querySelector('a-scene').addEventListener('loaded', function () {
-      console.log('A-Frame scene loaded');
+      // Animate the image
+      imagePlane.setAttribute('position', '4 0 0');
     });
 
-    document.querySelector('a-scene').addEventListener('camera-error', function(error) {
+    // Marker lost event
+    marker.addEventListener('markerLost', () => {
+      uiObj.textContent = "Looking for marker...";
+      uiObj.classList.remove('found');
+      uiObj.classList.add('lost');
+      
+      imagePlane.setAttribute('position', '0 0 0');
+    });
+
+    // Scene loaded event
+    document.querySelector('a-scene').addEventListener('loaded', () => {
+      uiObj.textContent = "Scene loaded - Show marker";
+      // Start image update interval
+      setInterval(updateImage, 5000);
+    });
+
+    // Camera ready event
+    document.querySelector('[camera]').addEventListener('camera-init', (event) => {
+      uiObj.textContent = "Camera ready - Show marker";
+    });
+
+    // Handle camera error
+    document.querySelector('[camera]').addEventListener('camera-error', (error) => {
+      uiObj.textContent = "Camera error - Please refresh and allow camera";
       console.error('Camera error:', error);
-      document.getElementById('uiobj').textContent = "Camera error - Please refresh and allow camera access";
     });
   </script>
 </body>
